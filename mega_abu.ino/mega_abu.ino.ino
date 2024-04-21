@@ -12,19 +12,20 @@
 #define pushball_PWM 7
 
 #define lim_kick1 1 
-#define lim_kick2 2
-#define lim_keep1 3
-#define lim_keep2 4
-#define lim_push1 5
-#define lim_push2 6
+#define lim_kick2 1
+#define lim_keep1 1
+#define lim_keep2 1
+#define lim_push1 1
+#define lim_push2 1
 // 1,+ = บน,ซ้าย 2,- = ล่าง,ขวา มุมมองจากหลังหุ่น
 
 #define color_sensor 7
-
+#define catched_ball 0
 bool left = false;
 bool right = false;
 uint32_t Time = 0; 
 int pwm = 0;
+int numbers = 0;
 void motorDrive(uint8_t pin, int val) {
   switch (pin) {
     case kickball_PWM:
@@ -82,18 +83,20 @@ void setup() {
 
 String reset(int scroll_down_speed = 100,int open_keeping_speed = 50){
   uint8_t flag = 0;
-  while(digitalRead(lim_push2) == 0 && millis() - Time < 5000){
+  while(lim_push2 == 0 && millis() - Time < 5000){
     motorDrive(pushball_PWM,-scroll_down_speed);
+    // Serial.println(millis()-Time);
   }
   motorDrive(pushball_PWM,0);
-  if(millis()-Time > 5000) flag=1;
+  if(millis()-Time >= 5000) flag=1;
   Time = millis();
-  while(digitalRead(lim_keep1) == 0 && millis()-Time < 3000){
+  while(lim_keep1 == 0 && millis()-Time < 3000){
     motorDrive(keepball_PWM,open_keeping_speed);
+    // Serial.println(millis()-Time);
   }
   motorDrive(keepball_PWM,0);
-  if(millis()-Time > 3000 && flag == 1) flag=3;
-  else if(millis()-Time > 3000 && flag != 1) flag=2;
+  if(millis()-Time >= 3000 && flag == 1) flag=3;
+  else if(millis()-Time >= 3000 && flag != 1) flag=2;
   switch(flag){
     case 0:
       return "Successfully setup";
@@ -113,37 +116,43 @@ String reset(int scroll_down_speed = 100,int open_keeping_speed = 50){
 
 String keep(int scroll_up_speed = 100, int keeping_speed = 255){
   while(millis()-Time < 3000){
-    if(digitalRead(lim_keep2)==1){
+    if(lim_keep2==1){
       motorDrive(keepball_PWM,0);
       return "not catch";
     }
     else
       motorDrive(keepball_PWM,-keeping_speed);
+    // Serial.println(millis()-Time);
   }
   Time = millis();
-  while(digitalRead(lim_push1) == 0 && millis() - Time < 5000){
+  while(lim_push1 == 0 && millis() - Time < 5000){
     motorDrive(pushball_PWM,scroll_up_speed);
+    // Serial.println(millis()-Time);
   }
   motorDrive(pushball_PWM,0);
-  if(millis()-Time > 5000) return "Scroll Timeout";
+  if(catched_ball == 0) return "not catch";
+  if(millis()-Time >= 5000) return "Scroll Timeout";
   return "Successfully keeping";
 }
 
 String send(int kick_back_speed = 100,int kick_front_speed = 255){
   uint8_t flag = 0;
-  while(millis()-Time < 2000 && digitalRead(lim_kick2==0)){
+  while(millis()-Time < 2000 && lim_kick2==0){
     motorDrive(kickball_PWM,kick_front_speed);
+    // Serial.println(millis()-Time);
   }
   motorDrive(kickball_PWM,0);
-  if(millis()-Time > 2000) flag = 1;
+  if(millis()-Time >= 2000) flag = 1;
   Time = millis();
-  while(millis()-Time < 2000 && digitalRead(lim_kick1==0)){
+  while(millis()-Time < 2000 && lim_kick1==0){
     motorDrive(kickball_PWM,kick_back_speed);
+    // Serial.println(millis()-Time);
   }
-  if(millis()-Time > 2000 && flag == 1) flag=3;
-  else if(millis()-Time > 3000 && flag != 1) flag=2;
+  if(millis()-Time >= 2000 && flag == 1) flag=3;
+  else if(millis()-Time >= 2000 && flag != 1) flag=2;
   motorDrive(kickball_PWM,0);
   motorDrive(keepball_PWM,0);
+  if(catched_ball == 1) return "send ball failed";
   switch(flag){
     case 0:
       return "Successfully kick";
@@ -160,18 +169,21 @@ String send(int kick_back_speed = 100,int kick_front_speed = 255){
   }
   return "Successfully kick";
 }
-String *receive_command(String incomingString,int numbers){
-  char *message = incomingString.c_str();
-  String command[10];
-  message = strtok(message,",");
-  command[numbers] = String(message);
-  while(message != NULL){
-    numbers +=1;
-    message = strtok(NULL,",");
-    command[numbers] = String(message);
+String *receive_command(String incomingString) {
+  static String command[10];
+  char *message = new char[incomingString.length() + 1];
+  strcpy(message, incomingString.c_str());
+
+  char *token = strtok(message, ",");
+  while (token != NULL && numbers < 10) {
+    command[numbers++] = String(token);
+    token = strtok(NULL, ",");
   }
+
+  delete[] message; 
   return command;
 }
+
 
 String implementation(String *command,int numbers){
   switch(numbers){
@@ -210,10 +222,11 @@ String implementation(String *command,int numbers){
 void loop(){
 
   if (Serial.available() > 0) {
+    numbers = 0;
     String incomingString = Serial.readStringUntil('\n'); // Read until newline character
-    int numbers = 0;
-    String *command = receive_command(incomingString,numbers);
+    String *command = receive_command(incomingString);
     String response = implementation(command,numbers);
+    Serial.println(response);
     }
     // delay(1000);
     // String responseString = "Response: " + incomingString;
