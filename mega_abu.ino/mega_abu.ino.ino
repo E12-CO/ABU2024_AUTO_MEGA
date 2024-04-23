@@ -11,12 +11,12 @@
 #define pushball_IN2 28 // 100
 #define pushball_PWM 7
 
-#define lim_kick1 1 
-#define lim_kick2 1
-#define lim_keep1 1
-#define lim_keep2 1
-#define lim_push1 1
-#define lim_push2 1
+#define lim_kick1 38 
+#define lim_kick2 40
+#define lim_keep1 42
+#define lim_keep2 44
+#define lim_push1 46
+#define lim_push2 48
 // 1,+ = บน,ซ้าย 2,- = ล่าง,ขวา มุมมองจากหลังหุ่น
 
 #define color_sensor 7
@@ -24,27 +24,27 @@
 bool left = false;
 bool right = false;
 uint32_t Time = 0; 
-int pwm = 0;
+int pwm = 100;
 int numbers = 0;
 void motorDrive(uint8_t pin, int val) {
   switch (pin) {
     case kickball_PWM:
       // OCR2A = (uint8_t)((val < 0) ? -val : val);
-      analogWrite(kickball_PWM,abs(pwm));
+      analogWrite(kickball_PWM,abs(val));
       digitalWrite(kickball_IN1, (val <= 0) ? 0 : 1);
       digitalWrite(kickball_IN2, (val < 0) ? 1 : 0);
       break;
 
     case pushball_PWM:
       // OCR1AL = (uint8_t)((val < 0) ? -val : val);
-      analogWrite(pushball_PWM,abs(pwm));
+      analogWrite(pushball_PWM,abs(val));
       digitalWrite(pushball_IN1, (val <= 0) ? 0 : 1);
       digitalWrite(pushball_IN2, (val < 0) ? 1 : 0);
       break;
 
     case keepball_PWM:
       // OCR1CL = (uint8_t)((val < 0) ? -val : val);
-      analogWrite(keepball_PWM,abs(pwm));
+      analogWrite(keepball_PWM,abs(val));
       digitalWrite(keepball_IN1, (val <= 0) ? 0 : 1);
       digitalWrite(keepball_IN2, (val < 0) ? 1 : 0);
       break;
@@ -69,29 +69,30 @@ void setup() {
 
   //INPUT
   // -- limit switch --
-  pinMode(lim_kick1,INPUT);
-  pinMode(lim_kick2,INPUT);
-  pinMode(lim_push1,INPUT);
-  pinMode(lim_push2,INPUT);
-  pinMode(lim_keep1,INPUT);
-  pinMode(lim_keep1,INPUT);
+  pinMode(lim_kick1,INPUT_PULLUP);
+  pinMode(lim_kick2,INPUT_PULLUP);
+  pinMode(lim_push1,INPUT_PULLUP);
+  pinMode(lim_push2,INPUT_PULLUP);
+  pinMode(lim_keep1,INPUT_PULLUP);
+  pinMode(lim_keep2,INPUT_PULLUP);
   // -- rgb sensor
 
   pinMode(color_sensor,INPUT);
-  
+  motorDrive(pushball_PWM,0);
 }
 
 String reset(int scroll_down_speed = 100,int open_keeping_speed = 50){
   uint8_t flag = 0;
-  while(lim_push2 == 0 && millis() - Time < 5000){
-    motorDrive(pushball_PWM,-scroll_down_speed);
+  while(!digitalRead(lim_push2) == 0 && millis() - Time < 5000){
+    motorDrive(pushball_PWM,scroll_down_speed);
     // Serial.println(millis()-Time);
   }
   motorDrive(pushball_PWM,0);
+  // Serial.println(millis()-Time);
   if(millis()-Time >= 5000) flag=1;
   Time = millis();
-  while(lim_keep1 == 0 && millis()-Time < 3000){
-    motorDrive(keepball_PWM,open_keeping_speed);
+  while(!digitalRead(lim_keep1) == 0 && millis()-Time < 3000){
+    motorDrive(keepball_PWM,--open_keeping_speed);
     // Serial.println(millis()-Time);
   }
   motorDrive(keepball_PWM,0);
@@ -114,37 +115,43 @@ String reset(int scroll_down_speed = 100,int open_keeping_speed = 50){
   return "Successfully setup";
 }
 
-String keep(int scroll_up_speed = 100, int keeping_speed = 255){
+String keep(int scroll_up_speed = 200, int keeping_speed = 180){
   while(millis()-Time < 3000){
-    if(lim_keep2==1){
+    if(!digitalRead(lim_keep2)==1){
       motorDrive(keepball_PWM,0);
+      Serial.println("here");
       return "not catch";
     }
     else
-      motorDrive(keepball_PWM,-keeping_speed);
+      motorDrive(keepball_PWM,keeping_speed);
     // Serial.println(millis()-Time);
   }
   Time = millis();
-  while(lim_push1 == 0 && millis() - Time < 5000){
-    motorDrive(pushball_PWM,scroll_up_speed);
-    // Serial.println(millis()-Time);
+  while(!digitalRead(lim_push1) == 0 && millis() - Time < 17000){
+    if(!digitalRead(lim_keep2)==1){
+    motorDrive(keepball_PWM,0);
+    motorDrive(pushball_PWM,0);
+    return"ball drop";
+    }
+    motorDrive(pushball_PWM,-scroll_up_speed);
+    Serial.println(millis()-Time);
   }
   motorDrive(pushball_PWM,0);
   if(catched_ball == 0) return "not catch";
-  if(millis()-Time >= 5000) return "Scroll Timeout";
+  if(millis()-Time >= 17000) return "Scroll Timeout";
   return "Successfully keeping";
 }
 
 String send(int kick_back_speed = 100,int kick_front_speed = 255){
   uint8_t flag = 0;
-  while(millis()-Time < 2000 && lim_kick2==0){
-    motorDrive(kickball_PWM,kick_front_speed);
+  while(millis()-Time < 2000 && !digitalRead(lim_kick2)==0){
+    motorDrive(kickball_PWM,-kick_front_speed);
     // Serial.println(millis()-Time);
   }
   motorDrive(kickball_PWM,0);
   if(millis()-Time >= 2000) flag = 1;
   Time = millis();
-  while(millis()-Time < 2000 && lim_kick1==0){
+  while(millis()-Time < 2000 && !digitalRead(lim_kick1)==0){
     motorDrive(kickball_PWM,kick_back_speed);
     // Serial.println(millis()-Time);
   }
@@ -220,30 +227,12 @@ String implementation(String *command,int numbers){
     }
 }
 void loop(){
-
   if (Serial.available() > 0) {
     numbers = 0;
     String incomingString = Serial.readStringUntil('\n'); // Read until newline character
     String *command = receive_command(incomingString);
     String response = implementation(command,numbers);
     Serial.println(response);
-    }
-    // delay(1000);
-    // String responseString = "Response: " + incomingString;
-
-    // Send the response back to the laptop
-    // Serial.print("Arduino sending back: ");
-    // Serial.println(responseString);
   }
-  // if(Serial.available() > 0){
-  //   char incomingChar = Serial.read();
-  //   if(incomingChar == 'a'){
-  //     pwm = 50;
-  //   }else if(incomingChar == 'd'){
-  //     pwm = -50;
-  //   }
-  //   else if(incomingChar != '\n')
-  //     pwm = 0;
-  // }
-  // motorDrive(keepball_PWM,pwm);
-  // motorDrive(pushball_PWM,pwm);
+
+}
