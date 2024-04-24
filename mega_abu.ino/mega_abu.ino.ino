@@ -147,7 +147,7 @@ String keep(int scroll_up_speed = 200, int keeping_speed = 180){
   return "Successfully keeping";
 }
 
-String send(int kick_back_speed = 100,int kick_front_speed = 255){
+String send(int kick_front_speed = 255){
   uint8_t flag = 0;
   while(millis()-Time < 2000 && !digitalRead(lim_kick2)==0){
     motorDrive(kickball_PWM,-kick_front_speed);
