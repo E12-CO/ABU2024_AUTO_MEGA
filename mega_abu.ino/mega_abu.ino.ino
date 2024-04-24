@@ -81,8 +81,13 @@ void setup() {
   motorDrive(pushball_PWM,0);
 }
 
-String reset(int scroll_down_speed = 100,int open_keeping_speed = 50){
+String reset(int kick_back_speed=50,int scroll_down_speed = 100,int open_keeping_speed = 50){
   uint8_t flag = 0;
+    while(millis()-Time < 2000 && !digitalRead(lim_kick1)==0){
+    motorDrive(kickball_PWM,kick_back_speed);
+    // Serial.println(millis()-Time);
+  }
+  motorDrive(kickball_PWM,0);
   while(!digitalRead(lim_push2) == 0 && millis() - Time < 5000){
     motorDrive(pushball_PWM,scroll_down_speed);
     // Serial.println(millis()-Time);
@@ -151,12 +156,6 @@ String send(int kick_back_speed = 100,int kick_front_speed = 255){
   motorDrive(kickball_PWM,0);
   if(millis()-Time >= 2000) flag = 1;
   Time = millis();
-  while(millis()-Time < 2000 && !digitalRead(lim_kick1)==0){
-    motorDrive(kickball_PWM,kick_back_speed);
-    // Serial.println(millis()-Time);
-  }
-  if(millis()-Time >= 2000 && flag == 1) flag=3;
-  else if(millis()-Time >= 2000 && flag != 1) flag=2;
   motorDrive(kickball_PWM,0);
   motorDrive(keepball_PWM,0);
   if(catched_ball == 1) return "send ball failed";
@@ -167,11 +166,7 @@ String send(int kick_back_speed = 100,int kick_front_speed = 255){
     case 1:
       return "Kick front Timeout";
       break;
-    case 2:
-      return "Kick Back Timeout";
-      break;
-    case 3:
-      return "Kick front and back Timeout";
+    default:
       break;
   }
   return "Successfully kick";
@@ -219,9 +214,12 @@ String implementation(String *command,int numbers){
         else if(command[0] == "keep")
           return keep(command[1].toInt(),command[2].toInt());
         else if(command[0] == "send")
-          return send(command[1].toInt(),command[2].toInt());
+          return send(command[1].toInt());
         break;
-      
+      case 4:
+        Time = millis();
+        if(command[0]=="reset")
+          return reset(command[1].toInt(),command[2].toInt(),command[3].toInt());
       default:
         break;
     }
