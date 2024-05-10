@@ -88,13 +88,13 @@ String reset(int kick_back_speed=50,int scroll_down_speed = 100,int open_keeping
     // Serial.println(millis()-Time);
   }
   motorDrive(kickball_PWM,0);
-  while(!digitalRead(lim_push2) == 0 && millis() - Time < 5000){
+  while(!digitalRead(lim_push2) == 0 && millis() - Time < 10000){
     motorDrive(pushball_PWM,scroll_down_speed);
     // Serial.println(millis()-Time);
   }
   motorDrive(pushball_PWM,0);
   // Serial.println(millis()-Time);
-  if(millis()-Time >= 5000) flag=1;
+  if(millis()-Time >= 10000) flag=1;
   Time = millis();
   while(!digitalRead(lim_keep1) == 0 && millis()-Time < 3000){
     motorDrive(keepball_PWM,--open_keeping_speed);
@@ -122,24 +122,24 @@ String reset(int kick_back_speed=50,int scroll_down_speed = 100,int open_keeping
 
 String keep(int scroll_up_speed = 200, int keeping_speed = 180){
   while(millis()-Time < 3000){
-    if(!digitalRead(lim_keep2)==1){
-      motorDrive(keepball_PWM,0);
-      Serial.println("here");
-      return "not catch";
-    }
-    else
+    // if(!digitalRead(lim_keep2)==1){
+    //   motorDrive(keepball_PWM,0);
+    //   Serial.println("here");
+    //   return "not catch";
+    // }
+    // else
       motorDrive(keepball_PWM,keeping_speed);
     // Serial.println(millis()-Time);
   }
   Time = millis();
   while(!digitalRead(lim_push1) == 0 && millis() - Time < 17000){
-    if(!digitalRead(lim_keep2)==1){
-    motorDrive(keepball_PWM,0);
-    motorDrive(pushball_PWM,0);
-    return"ball drop";
-    }
+    // if(!digitalRead(lim_keep2)==1){
+    // motorDrive(keepball_PWM,0);
+    // motorDrive(pushball_PWM,0);
+    // return"ball drop";
+    // }
     motorDrive(pushball_PWM,-scroll_up_speed);
-    Serial.println(millis()-Time);
+    // Serial.println(millis()-Time);
   }
   motorDrive(pushball_PWM,0);
   if(catched_ball == 0) return "not catch";
@@ -225,12 +225,28 @@ String implementation(String *command,int numbers){
     }
 }
 void loop(){
+  // Serial.print(!digitalRead(lim_push1));
+  // Serial.print(" ");
+  // Serial.print(!digitalRead(lim_push2));
+  // Serial.print(" ");
+  // Serial.print(!digitalRead(lim_kick1));
+  // Serial.print(" ");
+  // Serial.print(!digitalRead(lim_kick2));
+  // Serial.print(" ");
+  // Serial.print(!digitalRead(lim_keep1));
+  // Serial.print(" ");
+  // Serial.println(!digitalRead(lim_keep2));
   if (Serial.available() > 0) {
     numbers = 0;
     String incomingString = Serial.readStringUntil('\n'); // Read until newline character
-    String *command = receive_command(incomingString);
-    String response = implementation(command,numbers);
-    Serial.println(response);
+    // Serial.println(incomingString);
+    if(incomingString == "holding")
+      Serial.println("Fault");
+    else{
+      String *command = receive_command(incomingString);
+      String response = implementation(command,numbers);
+      Serial.println(response);
+    }
   }
 
 }
