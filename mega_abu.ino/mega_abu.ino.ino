@@ -91,9 +91,9 @@ void setup() {
 
 String reset(int kick_back_speed = 50, int scroll_down_speed = 60, int open_keeping_speed = 65) {
   uint8_t flag = 0;
-  Serial.println("Got Reset flag");
-  if(digitalRead(lim_push2) == 0)
-    goto out;
+  //Serial.println("Got Reset flag");
+  //if (digitalRead(lim_push2) == 0)
+  //  goto out;
   motorDrive(keepball_PWM, 0);
 
   // Retreat kicker
@@ -103,16 +103,23 @@ String reset(int kick_back_speed = 50, int scroll_down_speed = 60, int open_keep
   }
   motorDrive(kickball_PWM, 0);
 
+  Time = millis();
+  motorDrive(keepball_PWM, open_keeping_speed);
+  while (!digitalRead(lim_keep2) == 0 && millis() - Time < 2000) {
+
+  }
+  motorDrive(keepball_PWM, 0);
+
   // Lower the lifter
   motorDrive(pushball_PWM, scroll_down_speed);
   while ((!digitalRead(lim_push2) == 0) && ((millis() - Time) < 10000)) {
-   
+
   }
   motorDrive(pushball_PWM, 0);
 
   if ((millis() - Time) >= 10000)
     flag = 1;
-    
+
 out:
   // Open up the gripper
   Time = millis();
@@ -120,11 +127,12 @@ out:
   while (!digitalRead(lim_keep1) == 0 && millis() - Time < 2000) {
 
   }
-  motorDrive(keepball_PWM, 0);
   
-  if (millis() - Time >= 3000 && flag == 1) 
+  motorDrive(keepball_PWM, 0);
+
+  if (millis() - Time >= 3000 && flag == 1)
     flag = 3;
-  else if (millis() - Time >= 3000 && flag != 1) 
+  else if (millis() - Time >= 3000 && flag != 1)
     flag = 2;
 
   switch (flag) {
@@ -156,14 +164,8 @@ String keep(int scroll_up_speed = 200, int keeping_speed = 180) {
     // Serial.println(millis()-Time);
   }
   Time = millis();
+  motorDrive(pushball_PWM, -120);
   while (!digitalRead(lim_push1) == 0 && millis() - Time < 17000) {
-    // if(!digitalRead(lim_keep2)==1){
-    // motorDrive(keepball_PWM,0);
-    // motorDrive(pushball_PWM,0);
-    // return"ball drop";
-    // }
-    motorDrive(pushball_PWM, -scroll_up_speed);
-    // Serial.println(millis()-Time);
   }
   motorDrive(pushball_PWM, 0);
   if (catched_ball == 0) return "not catch";
@@ -173,11 +175,19 @@ String keep(int scroll_up_speed = 200, int keeping_speed = 180) {
 
 String send(int kick_front_speed = 255) {
   uint8_t flag = 0;
+
+  Time = millis();
+  motorDrive(pushball_PWM, -120);
+  while (!digitalRead(lim_push1) == 0 && millis() - Time < 6000) {
+  }
+  motorDrive(pushball_PWM, 0);
+
+  Time = millis();
+  motorDrive(kickball_PWM, -kick_front_speed);
   while (millis() - Time < 2000 && !digitalRead(lim_kick2) == 0) {
-    motorDrive(kickball_PWM, -kick_front_speed);
-    // Serial.println(millis()-Time);
   }
   motorDrive(kickball_PWM, 0);
+  
   if (millis() - Time >= 2000) flag = 1;
   Time = millis();
   motorDrive(kickball_PWM, 0);
@@ -224,28 +234,6 @@ String implementation(String *command, int numbers) {
       else if (command[0] == "send")
         return send();
       break;
-    //      case 2:
-    //        Time = millis();
-    //        if(command[0]=="reset")
-    //          return reset(command[1].toInt());
-    //        else if(command[0] == "keep")
-    //          return keep(command[1].toInt());
-    //        else if(command[0] == "send")
-    //          return send(command[1].toInt());
-    //        break;
-    //      case 3:
-    //        Time = millis();
-    //        if(command[0]=="reset")
-    //          return reset(command[1].toInt(),command[2].toInt());
-    //        else if(command[0] == "keep")
-    //          return keep(command[1].toInt(),command[2].toInt());
-    //        else if(command[0] == "send")
-    //          return send(command[1].toInt());
-    //        break;
-    //      case 4:
-    //        Time = millis();
-    //        if(command[0]=="reset")
-    //          return reset(command[1].toInt(),command[2].toInt(),command[3].toInt());
     default:
       break;
   }
@@ -268,7 +256,7 @@ void loop() {
   }
 
   switch (keep_fsm) {
-    case 0:
+    case 0:// Wait for ball
       {
         if (((PINE & (1 << 4)) == 0) && (digitalRead(lim_push1) == 1)) { // Got a ball and not on the top.
           reset_flag = 0;
@@ -280,9 +268,9 @@ void loop() {
       }
       break;
 
-    case 1:
+    case 1:// grab the ball + safety check
       {
-        if ((millis() - keep_delay) > 2000) {
+        if ((millis() - keep_delay) > 3000) {
           keep_delay = millis();
           Serial.println("Keep Done!");
           keep_fsm = 2;
@@ -290,16 +278,27 @@ void loop() {
       }
       break;
 
-    case 2:
+    case 2:// Lift the ball up roughtly half way
       {
-        if (!digitalRead(lim_push1) == 0 && (millis() - keep_delay) < 17000) {
+        if (!digitalRead(lim_push1) == 0 && (millis() - keep_delay) < 3000) {
           motorDrive(pushball_PWM, -120);
         } else {
           motorDrive(pushball_PWM, 0);
-          keep_fsm = 0;
+          keep_fsm = 3;
         }
       }
-    break;
+      break;
+
+    case 3:
+      {
+        
+      }
+      break;
+  }
+
+  if (digitalRead(lim_keep2) == 0) { // glitch safety prevents from holding when no ball.
+    motorDrive(keepball_PWM, 0);
+    keep_fsm = 0;
   }
 
 }
