@@ -296,9 +296,13 @@ void loop() {
       break;
   }
 
-  if (digitalRead(lim_keep2) == 0) { // glitch safety prevents from holding when no ball.
+  if ((digitalRead(lim_keep2) == 0) && digitalRead(lim_push2) == 1) { // glitch safety prevents from holding when no ball.
     motorDrive(keepball_PWM, 0);
     keep_fsm = 0;
+  }else if((digitalRead(lim_keep2) == 0) && digitalRead(lim_push2) == 0){// glitch in the case of lifter was lowered 
+    motorDrive(keepball_PWM, 0);
+    keep_fsm = 0;
+    reset();
   }
 
 }
