@@ -59,36 +59,6 @@ void motorDrive(uint8_t pin, int val) {
   }
 }
 
-void setup() {
-  Serial.begin(115200);
-  //OUTPUT
-  pinMode(kickball_IN1, OUTPUT);
-  pinMode(kickball_IN2, OUTPUT);
-  pinMode(pushball_IN1, OUTPUT);
-  pinMode(pushball_IN2, OUTPUT);
-  pinMode(keepball_IN1, OUTPUT);
-  pinMode(keepball_IN2, OUTPUT);
-  pinMode(kickball_PWM, OUTPUT);
-  pinMode(pushball_PWM, OUTPUT);
-  pinMode(keepball_PWM, OUTPUT);
-
-  //INPUT
-  // -- limit switch --
-  pinMode(lim_kick1, INPUT_PULLUP);
-  pinMode(lim_kick2, INPUT_PULLUP);
-  pinMode(lim_push1, INPUT_PULLUP);
-  pinMode(lim_push2, INPUT_PULLUP);
-  pinMode(lim_keep1, INPUT_PULLUP);
-  pinMode(lim_keep2, INPUT_PULLUP);
-  pinMode(lim_ball_catch, INPUT_PULLUP);
-  // -- rgb sensor
-
-  pinMode(color_sensor, INPUT);
-  motorDrive(pushball_PWM, 0);
-  Serial.println("Starting...");
-  delay(1000);
-}
-
 String reset(int kick_back_speed = 50, int scroll_down_speed = 60, int open_keeping_speed = 65) {
   uint8_t flag = 0;
   //Serial.println("Got Reset flag");
@@ -239,6 +209,38 @@ String implementation(String *command, int numbers) {
   }
 }
 
+void setup() {
+  Serial.begin(115200);
+  //OUTPUT
+  pinMode(kickball_IN1, OUTPUT);
+  pinMode(kickball_IN2, OUTPUT);
+  pinMode(pushball_IN1, OUTPUT);
+  pinMode(pushball_IN2, OUTPUT);
+  pinMode(keepball_IN1, OUTPUT);
+  pinMode(keepball_IN2, OUTPUT);
+  pinMode(kickball_PWM, OUTPUT);
+  pinMode(pushball_PWM, OUTPUT);
+  pinMode(keepball_PWM, OUTPUT);
+
+  //INPUT
+  // -- limit switch --
+  pinMode(lim_kick1, INPUT_PULLUP);
+  pinMode(lim_kick2, INPUT_PULLUP);
+  pinMode(lim_push1, INPUT_PULLUP);
+  pinMode(lim_push2, INPUT_PULLUP);
+  pinMode(lim_keep1, INPUT_PULLUP);
+  pinMode(lim_keep2, INPUT_PULLUP);
+  pinMode(lim_ball_catch, INPUT_PULLUP);
+  // -- rgb sensor
+
+  pinMode(color_sensor, INPUT);
+  motorDrive(pushball_PWM, 0);
+  Serial.println("Starting...");
+  reset();
+  delay(500);
+}
+
+
 uint8_t keep_fsm;
 unsigned long keep_delay = 0;
 void loop() {
@@ -260,7 +262,7 @@ void loop() {
       {
         if (((PINE & (1 << 4)) == 0) && (digitalRead(lim_push1) == 1)) { // Got a ball and not on the top.
           reset_flag = 0;
-          Serial.println("Catch Keep!");
+          //Serial.println("Catch Keep!");
           keep_fsm = 1;
           motorDrive(keepball_PWM, 180);
           keep_delay = millis();
@@ -270,9 +272,9 @@ void loop() {
 
     case 1:// grab the ball + safety check
       {
-        if ((millis() - keep_delay) > 3000) {
+        if ((millis() - keep_delay) > 1500) {
           keep_delay = millis();
-          Serial.println("Keep Done!");
+          //Serial.println("Keep Done!");
           keep_fsm = 2;
         }
       }
@@ -284,7 +286,7 @@ void loop() {
           motorDrive(pushball_PWM, -120);
         } else {
           motorDrive(pushball_PWM, 0);
-          keep_fsm = 3;
+          keep_fsm = 0;
         }
       }
       break;
@@ -296,13 +298,13 @@ void loop() {
       break;
   }
 
-  if ((digitalRead(lim_keep2) == 0) && digitalRead(lim_push2) == 1) { // glitch safety prevents from holding when no ball.
+  if (digitalRead(lim_keep2) == 0) { // glitch safety prevents from holding when no ball.
     motorDrive(keepball_PWM, 0);
-    keep_fsm = 0;
-  }else if((digitalRead(lim_keep2) == 0) && digitalRead(lim_push2) == 0){// glitch in the case of lifter was lowered 
+    motorDrive(keepball_PWM, -100);
+    delay(100);
     motorDrive(keepball_PWM, 0);
+    motorDrive(pushball_PWM, 0);
     keep_fsm = 0;
-    reset();
   }
 
 }
