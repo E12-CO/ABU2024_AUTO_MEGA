@@ -1,57 +1,112 @@
+// New controller code for remodel ABU autonomous robot.
+// Robot Club Engineering KMITL.
 
-#define kickball_IN1 33 // เตะสุดกำลัง ถอยชน limit switch
-#define kickball_IN2 31 // ถอย 100
-#define kickball_PWM 11
+#include <Wire.h>
 
-#define keepball_IN1 29 // หนีบสุดกำลัง ปล่อยตาม limit switch
-#define keepball_IN2 27 // 50
-#define keepball_PWM 8
+// Macros
+#define BALL_OUT_DELAY 3000 // 3 seconds timeout for ball to leave the robot
 
-#define pushball_IN1 26 // ลงแตะ limit switch,ขึ้นแตะ limit switch
-#define pushball_IN2 28 // 100
-#define pushball_PWM 7
+// I/O stuffs
+// Roller motor
+#define ROLLER_PWM    0
+#define ROLLER_IN1    0
+#define ROLLER_IN2    0
 
-#define lim_kick1 38
-#define lim_kick2 40
-#define lim_keep1 42
-#define lim_keep2 44
-#define lim_push1 46
-#define lim_push2 48
-// 1,+ = บน,ซ้าย 2,- = ล่าง,ขวา มุมมองจากหลังหุ่น
+#define ROLLER_SPEED  255
 
-#define lim_ball_catch  2
+// Conveyor motor
+#define CONVEYOR_PWM  1
+#define CONVEYOR_IN1  0
+#define CONVEYOR_IN2  0
 
-#define color_sensor 7
-#define catched_ball 0
-bool left = false;
-bool right = false;
-uint32_t Time = 0;
-int pwm = 100;
-int numbers = 0;
+#define CONVEYOR_SPEED  200
 
-uint8_t reset_flag;
+// Limit sws
+#define LIMIT_BALL_HOLD   0   // Limit switch for ball holding detection (inside the robot)
+#define LIMIT_BALL_OUT  1   // Limit switch for ball out detection 
 
-void motorDrive(uint8_t pin, int val) {
-  switch (pin) {
-    case kickball_PWM:
-      // OCR2A = (uint8_t)((val < 0) ? -val : val);
-      analogWrite(kickball_PWM, abs(val));
-      digitalWrite(kickball_IN1, (val <= 0) ? 0 : 1);
-      digitalWrite(kickball_IN2, (val < 0) ? 1 : 0);
-      break;
+// Serial runner task's stuffs
+uint8_t serial_fsm;
+enum SERIALS_FSM {
+  SERIAL_FSM_IDLE = 0,
+  SERIAL_FSM_CMD_PARSE,
+};
+char str_input[10];
+uint8_t str_idx;
 
-    case pushball_PWM:
+// Commanding and flaging stuffs
+uint8_t roller_flag;
+uint8_t ball_found;
+uint8_t ball_accept;
+uint8_t ball_reject;
+uint8_t drop_ball_flag;
+
+// Ball feed runner task's stuffs
+uint8_t ball_fsm;
+enum BALLF_FSM {
+  BALL_FSM_IDLE = 0,    // Idle state, wait for roller command and start the roller and conveyor(รอสั่งดูดบอล)
+  BALL_FSM_BALL_IN,     // Stop the roller and conveyor when ball in(สั่งมอเตอร์คัมภีย์กับสายพานหยุดตอนลูกเข้ามา)
+  BALL_FSM_BALL_CHECK,  // Check the Ball color (ตรวจสีบอล)
+  BALL_FSM_BALL_HOLD,   // In case of currect ball, just hold it (ถ้าสีถูก ก็holdเก็บไว้ก่อน)
+  BALL_FSM_BALL_OUT,    // In case of rejecting ball or drop at Silo (เคสrejectบอลที่ไม่ถูกสี กับเคสที่ใช้หย่อน silo)
+};
+
+// RGB color sensor
+typedef struct{
+  uint16_t clear_color;
+  uint16_t red_color;
+  uint16_t green_color;
+  uint16_t blue_color;  
+}color_read_t;
+
+color_read_t color_get; // typedef struct for getting color
+color_read_t color_ball_red;
+color_read_t color_ball_blue;
+color_read_t color_ball_purple;
+
+// Default readout colors of each ball types
+void color_Init() {
+  color_ball_red.red_color = 0;
+  color_ball_red.green_color = 0;
+  color_ball_red.blue_color = 0;
+
+  color_ball_blue.red_color = 0;
+  color_ball_blue.green_color = 0;
+  color_ball_blue.blue_color = 0;
+
+  color_ball_purple.red_color = 0;
+  color_ball_purple.green_color = 0;
+  color_ball_purple.blue_color = 0;
+}
+
+uint8_t color_check_purple() {
+  uint8_t truth_flag;
+  if ((color_get.red_color > (color_ball_purple.red_color - 20)) && (color_get.red_color < (color_ball_purple.red_color + 20)))
+    truth_flag++;
+
+  if ((color_get.green_color > (color_ball_purple.green_color - 20)) && (color_get.green_color < (color_ball_purple.green_color + 20)))
+    truth_flag++;
+
+  if ((color_get.blue_color > (color_ball_purple.blue_color - 20)) && (color_get.blue_color < (color_ball_purple.blue_color + 20)))
+    truth_flag++;
+
+  return truth_flag;
+}
+
+void motorDrive(uint8_t channel, int val) {
+  switch (channel) {
+    case ROLLER_PWM:
       // OCR1AL = (uint8_t)((val < 0) ? -val : val);
-      analogWrite(pushball_PWM, abs(val));
-      digitalWrite(pushball_IN1, (val <= 0) ? 0 : 1);
-      digitalWrite(pushball_IN2, (val < 0) ? 1 : 0);
+      analogWrite(ROLLER_PWM, abs(val));
+      digitalWrite(ROLLER_IN1, (val <= 0) ? 0 : 1);
+      digitalWrite(ROLLER_IN2, (val < 0) ? 1 : 0);
       break;
 
-    case keepball_PWM:
+    case CONVEYOR_PWM:
       // OCR1CL = (uint8_t)((val < 0) ? -val : val);
-      analogWrite(keepball_PWM, abs(val));
-      digitalWrite(keepball_IN1, (val <= 0) ? 0 : 1);
-      digitalWrite(keepball_IN2, (val < 0) ? 1 : 0);
+      analogWrite(CONVEYOR_PWM, abs(val));
+      digitalWrite(CONVEYOR_IN1, (val <= 0) ? 0 : 1);
+      digitalWrite(CONVEYOR_IN2, (val < 0) ? 1 : 0);
       break;
 
     default:
@@ -62,244 +117,270 @@ void motorDrive(uint8_t pin, int val) {
 void setup() {
   Serial.begin(115200);
   //OUTPUT
-  pinMode(kickball_IN1, OUTPUT);
-  pinMode(kickball_IN2, OUTPUT);
-  pinMode(pushball_IN1, OUTPUT);
-  pinMode(pushball_IN2, OUTPUT);
-  pinMode(keepball_IN1, OUTPUT);
-  pinMode(keepball_IN2, OUTPUT);
-  pinMode(kickball_PWM, OUTPUT);
-  pinMode(pushball_PWM, OUTPUT);
-  pinMode(keepball_PWM, OUTPUT);
+  
 
   //INPUT
   // -- limit switch --
-  pinMode(lim_kick1, INPUT_PULLUP);
-  pinMode(lim_kick2, INPUT_PULLUP);
-  pinMode(lim_push1, INPUT_PULLUP);
-  pinMode(lim_push2, INPUT_PULLUP);
-  pinMode(lim_keep1, INPUT_PULLUP);
-  pinMode(lim_keep2, INPUT_PULLUP);
-  pinMode(lim_ball_catch, INPUT_PULLUP);
+  pinMode(LIMIT_BALL_HOLD, INPUT_PULLUP);
   // -- rgb sensor
+  color_Init();
+  Wire.begin();
+  tcs3472_Init();
 
-  pinMode(color_sensor, INPUT);
-  motorDrive(pushball_PWM, 0);
+
   Serial.println("Starting...");
   delay(1000);
 }
 
-String reset(int kick_back_speed = 50, int scroll_down_speed = 60, int open_keeping_speed = 65) {
-  uint8_t flag = 0;
-  Serial.println("Got Reset flag");
-  if(digitalRead(lim_push2) == 0)
-    goto out;
-  motorDrive(keepball_PWM, 0);
-
-  // Retreat kicker
-  motorDrive(kickball_PWM, kick_back_speed);
-  while (((millis() - Time) < 2000) && (!digitalRead(lim_kick1) == 0)) {
-
-  }
-  motorDrive(kickball_PWM, 0);
-
-  // Lower the lifter
-  motorDrive(pushball_PWM, scroll_down_speed);
-  while ((!digitalRead(lim_push2) == 0) && ((millis() - Time) < 10000)) {
-   
-  }
-  motorDrive(pushball_PWM, 0);
-
-  if ((millis() - Time) >= 10000)
-    flag = 1;
-    
-out:
-  // Open up the gripper
-  Time = millis();
-  motorDrive(keepball_PWM, -open_keeping_speed);
-  while (!digitalRead(lim_keep1) == 0 && millis() - Time < 2000) {
-
-  }
-  motorDrive(keepball_PWM, 0);
-  
-  if (millis() - Time >= 3000 && flag == 1) 
-    flag = 3;
-  else if (millis() - Time >= 3000 && flag != 1) 
-    flag = 2;
-
-  switch (flag) {
-    case 0:
-      return "Successfully setup";
-      break;
-    case 1:
-      return "Scroller Timeout";
-      break;
-    case 2:
-      return "Keeper Timeout";
-      break;
-    case 3:
-      return "Scroller and Keeper Timeout";
-      break;
-  }
-  return "Successfully setup";
-}
-
-String keep(int scroll_up_speed = 200, int keeping_speed = 180) {
-  while (millis() - Time < 3000) {
-    // if(!digitalRead(lim_keep2)==1){
-    //   motorDrive(keepball_PWM,0);
-    //   Serial.println("here");
-    //   return "not catch";
-    // }
-    // else
-    motorDrive(keepball_PWM, keeping_speed);
-    // Serial.println(millis()-Time);
-  }
-  Time = millis();
-  while (!digitalRead(lim_push1) == 0 && millis() - Time < 17000) {
-    // if(!digitalRead(lim_keep2)==1){
-    // motorDrive(keepball_PWM,0);
-    // motorDrive(pushball_PWM,0);
-    // return"ball drop";
-    // }
-    motorDrive(pushball_PWM, -scroll_up_speed);
-    // Serial.println(millis()-Time);
-  }
-  motorDrive(pushball_PWM, 0);
-  if (catched_ball == 0) return "not catch";
-  if (millis() - Time >= 17000) return "Scroll Timeout";
-  return "Successfully keeping";
-}
-
-String send(int kick_front_speed = 255) {
-  uint8_t flag = 0;
-  while (millis() - Time < 2000 && !digitalRead(lim_kick2) == 0) {
-    motorDrive(kickball_PWM, -kick_front_speed);
-    // Serial.println(millis()-Time);
-  }
-  motorDrive(kickball_PWM, 0);
-  if (millis() - Time >= 2000) flag = 1;
-  Time = millis();
-  motorDrive(kickball_PWM, 0);
-  motorDrive(keepball_PWM, 0);
-  if (catched_ball == 1) return "send ball failed";
-  switch (flag) {
-    case 0:
-      return "Successfully kick";
-      break;
-    case 1:
-      return "Kick front Timeout";
-      break;
-    default:
-      break;
-  }
-  return "Successfully kick";
-}
-String *receive_command(String incomingString) {
-  static String command[10];
-  char *message = new char[incomingString.length() + 1];
-  strcpy(message, incomingString.c_str());
-
-  char *token = strtok(message, ",");
-  while (token != NULL && numbers < 10) {
-    command[numbers++] = String(token);
-    token = strtok(NULL, ",");
-  }
-
-  delete[] message;
-  return command;
-}
-
-
-String implementation(String *command, int numbers) {
-  switch (numbers) {
-    case 1:
-      Time = millis();
-      if (command[0] == "reset") {
-        reset_flag = 1;
-        return reset();
-      }
-      //else if(command[0] == "keep")
-      //  return keep();
-      else if (command[0] == "send")
-        return send();
-      break;
-    //      case 2:
-    //        Time = millis();
-    //        if(command[0]=="reset")
-    //          return reset(command[1].toInt());
-    //        else if(command[0] == "keep")
-    //          return keep(command[1].toInt());
-    //        else if(command[0] == "send")
-    //          return send(command[1].toInt());
-    //        break;
-    //      case 3:
-    //        Time = millis();
-    //        if(command[0]=="reset")
-    //          return reset(command[1].toInt(),command[2].toInt());
-    //        else if(command[0] == "keep")
-    //          return keep(command[1].toInt(),command[2].toInt());
-    //        else if(command[0] == "send")
-    //          return send(command[1].toInt());
-    //        break;
-    //      case 4:
-    //        Time = millis();
-    //        if(command[0]=="reset")
-    //          return reset(command[1].toInt(),command[2].toInt(),command[3].toInt());
-    default:
-      break;
-  }
-}
-
-uint8_t keep_fsm;
-unsigned long keep_delay = 0;
 void loop() {
-  if (Serial.available() > 0) {
-    numbers = 0;
-    String incomingString = Serial.readStringUntil('\n'); // Read until newline character
-    // Serial.println(incomingString);
-    if (incomingString == "holding")
-      Serial.println("Fault");
-    else {
-      String *command = receive_command(incomingString);
-      String response = implementation(command, numbers);
-      Serial.println(response);
-    }
-  }
+  serial_runner();
+  ballFeed_runner();
+}
 
-  switch (keep_fsm) {
-    case 0:
+/* สรุปคำสั่ง
+   S\n -> สั่งเริ่มดูดบอล Roller กับ Conveyor หมุน
+   H\n -> Pi ถามแบบบอลที่ดูดได้ Mega จะส่งasciiกลับมาดังนี้
+      - 'F' คือไม่มีลูกบอลกดอยู่ที่ Limit switch
+      - 'A' คือมีลูกบอลที่Limit switchและเอา(แดง/น้ำเงิน)
+      - 'R' คือมีลูกบอลที่Limit switch แต่ไม่เอา(ม่วง)
+   A\n -> (อาจจะไม่ได้ใช้)รับบอลไว้กรณีเป็นสีที่ต้องการ
+   R\n -> (อาจจะไม่ได้ใช้)คายบอลออกกรณีไม่ใช่สีที่ต้องการ
+   O\n -> สั่งปล่อยบอลลงที่ Silo
+   D\n -> ใช้ Debug จะ print สิ่งที่จำเป็นออกมา monitor
+   E\n -> Emer ฉุกเฉิน
+*/
+
+void serial_runner() {
+  switch (serial_fsm) {
+    case SERIAL_FSM_IDLE:
       {
-        if (((PINE & (1 << 4)) == 0) && (digitalRead(lim_push1) == 1)) { // Got a ball and not on the top.
-          reset_flag = 0;
-          Serial.println("Catch Keep!");
-          keep_fsm = 1;
-          motorDrive(keepball_PWM, 180);
-          keep_delay = millis();
+        if (Serial.available() > 0) {
+          str_input[str_idx] = Serial.read();
+          // Detect new line ending of CMD
+          if (str_input[str_idx] == '\n') {
+            serial_fsm = SERIAL_FSM_CMD_PARSE;
+            break;
+          }
+          str_idx++;
+          if (str_idx > 10) {
+            str_idx = 0;
+            memset(str_input, 0, 10);// Clear RX buffer
+          }
         }
       }
       break;
 
-    case 1:
+    case SERIAL_FSM_CMD_PARSE:
       {
-        if ((millis() - keep_delay) > 2000) {
-          keep_delay = millis();
-          Serial.println("Keep Done!");
-          keep_fsm = 2;
+        // Command parser
+        switch (str_input[0]) {
+          case 'S':// Start ball roller (สั่งปั่นคัมภีย์ดูดบอล)
+          case 's':
+            {
+              if (str_idx != 1) {
+                str_idx = 0;
+                break;
+              }
+              str_idx = 0;
+
+              roller_flag = 1;
+
+              memset(str_input, 0, 10);// Clear command buffer
+            }
+            break;
+
+          case 'H':// Rpi request to check ball color (Pi ขอเช็คว่าเอาหรือไม่เอาบอล)
+          case 'h':
+            {
+              if (str_idx != 1) {
+                str_idx = 0;
+                break;
+              }
+              str_idx = 0;
+              // Three Types of respond
+              // Waiting, ball empty -> Serial.print('F');
+              // Correct ball -> Serial.print('A');
+              // Rejected ball -> Serial.print('R');
+
+              if (ball_found == 0) {
+                Serial.print('F');
+              } else {
+                if (ball_accept == 1 && ball_reject == 0)
+                  Serial.print('A');
+                else if (ball_accept == 0 && ball_reject == 1)
+                  Serial.print('R');
+                else
+                  Serial.print('F');
+              }
+              memset(str_input, 0, 10);// Clear command buffer
+            }
+            break;
+
+          case 'A':// Accept ball เก็บบอลไว้ (Might be unused)
+          case 'a':
+            {
+              if (str_idx != 1) {
+                str_idx = 0;
+                break;
+              }
+              str_idx = 0;
+
+              ball_accept = 1;
+              ball_reject = 0;
+              memset(str_input, 0, 10);// Clear command buffer
+            }
+            break;
+
+          case 'R':// Reject ball ไม่เก็บบอลไว้ (Might be unused)
+          case 'r':
+            {
+              if (str_idx != 1) {
+                str_idx = 0;
+                break;
+              }
+              str_idx = 0;
+
+              ball_accept = 0;
+              ball_reject = 1;
+              memset(str_input, 0, 10);// Clear command buffer
+            }
+            break;
+
+          case 'O':// Drop ball at the silo
+          case 'o':
+            {
+              if (str_idx != 1) {
+                str_idx = 0;
+                break;
+              }
+              str_idx = 0;
+
+              drop_ball_flag = 1;
+
+              memset(str_input, 0, 10);// Clear command buffer
+            }
+            break;
+
+          case'D':// Debug case, Return All FSM and flag data. ใช้ Debug
+          case'd':
+            {
+              if (str_idx != 1) {
+                str_idx = 0;
+                break;
+              }
+              str_idx = 0;
+              // Serial.print all necessary internal stuffs for debugging purpose
+              // serial_fsm
+              // ball_fsm
+              // flags
+
+              memset(str_input, 0, 10);// Clear command buffer
+            }
+            break;
+
+          case 'E':// Emergency stop หยุดฉุกเฉิน
+          case 'e':
+            {
+              // TODO : STOP all motor and reset ball fsm to IDLE
+              roller_flag = 0;// Clear roller flag
+              ball_fsm = BALL_FSM_IDLE;// Get back to idle state
+
+              if (str_idx != 1) {
+                str_idx = 0;
+                break;
+              }
+              str_idx = 0;
+              memset(str_input, 0, 10);// Clear command buffer
+            }
+            break;
+
+        }// Command parser
+      }
+      break;
+  }// Serial fsm
+}
+
+unsigned long timeout_millis = 0;
+
+void ballFeed_runner() {
+  switch (ball_fsm) {
+    case BALL_FSM_IDLE:// Wait for roller command 'S'
+      {
+        if (roller_flag == 1) {
+          roller_flag = 0;
+          // Start roller and conveyor
+          motorDrive(ROLLER_PWM, ROLLER_SPEED);
+          motorDrive(CONVEYOR_PWM, CONVEYOR_SPEED);
+          ball_fsm = BALL_FSM_BALL_IN;
         }
       }
       break;
 
-    case 2:
+    case BALL_FSM_BALL_IN:// Wait until the ball touch limit switch and stop motor
       {
-        if (!digitalRead(lim_push1) == 0 && (millis() - keep_delay) < 17000) {
-          motorDrive(pushball_PWM, -120);
+        if (digitalRead(LIMIT_BALL_HOLD) == 0) {
+          // Stop roller and conveyor
+          motorDrive(ROLLER_PWM, 0);
+          motorDrive(CONVEYOR_PWM, 0);
+          ball_found = 1;
+          ball_fsm = BALL_FSM_BALL_CHECK;
+        }
+      }
+      break;
+
+    case BALL_FSM_BALL_CHECK:// Check ball color and decided whether to accept or reject
+      {
+        // Check color
+        delay(10);// Little bit of delay
+        tcs3472_readColor(&color_get);
+        delay(10);// Little bit of delay
+        
+        // Process each color channel
+        if (color_check_purple() != 3) {
+          // Confidence less than 3, reject the ball
+          ball_accept = 0;
+          ball_reject = 1;
+          motorDrive(CONVEYOR_PWM, CONVEYOR_SPEED);
+          ball_fsm = BALL_FSM_BALL_OUT;
         } else {
-          motorDrive(pushball_PWM, 0);
-          keep_fsm = 0;
+          // Confidence == 3, accept the ball
+          ball_accept = 1;
+          ball_reject = 0;
+          ball_fsm = BALL_FSM_BALL_HOLD;
         }
+
       }
-    break;
+      break;
+
+    case BALL_FSM_BALL_HOLD:// Hold the ball until we got drop ball flag
+      {
+         if(drop_ball_flag == 1){// Got a flag to send the ball out
+          drop_ball_flag = 0;
+          motorDrive(CONVEYOR_PWM, CONVEYOR_SPEED);
+          timeout_millis = millis();
+          ball_fsm = BALL_FSM_BALL_OUT; 
+         }
+      }
+      break;
+
+    case BALL_FSM_BALL_OUT:// Send the ball out to the silo, or just reject from the robot.
+      {
+        if(((millis() - timeout_millis) > BALL_OUT_DELAY) || (digitalRead(LIMIT_BALL_OUT) == 0)){
+          // Stop conveyor
+          motorDrive(CONVEYOR_PWM, 0);
+          // Clear all flags
+          ball_found = 0;
+          ball_accept = 0;
+          ball_reject = 0;
+          drop_ball_flag = 0;
+          roller_flag = 0;
+
+          // Back to idle
+          ball_fsm = BALL_FSM_IDLE;
+        }
+
+      }
+      break;
   }
 
 }
