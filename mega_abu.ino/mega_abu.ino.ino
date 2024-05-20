@@ -22,7 +22,7 @@
 #define CONVEYOR_SPEED  200
 
 // Limit sws
-#define LIMIT_BALL_HOLD   0   // Limit switch for ball holding detection (inside the robot)
+#define LIMIT_BALL_IN   0   // Limit switch for ball in+hold detection
 #define LIMIT_BALL_OUT  1   // Limit switch for ball out detection 
 
 // Serial runner task's stuffs
@@ -121,7 +121,8 @@ void setup() {
 
   //INPUT
   // -- limit switch --
-  pinMode(LIMIT_BALL_HOLD, INPUT_PULLUP);
+  pinMode(LIMIT_BALL_IN,    INPUT_PULLUP);
+  pinMode(LIMIT_BALL_OUT,   INPUT_PULLUP);
   // -- rgb sensor
   color_Init();
   Wire.begin();
@@ -339,7 +340,7 @@ void ballFeed_runner() {
 
     case BALL_FSM_BALL_IN:// Wait until the ball touch limit switch and stop motor
       {
-        if (digitalRead(LIMIT_BALL_HOLD) == 0) {
+        if (digitalRead(LIMIT_BALL_IN) == 0) {
           // Stop roller and conveyor
           motorDrive(ROLLER_PWM, 0);
           motorDrive(CONVEYOR_PWM, 0);
