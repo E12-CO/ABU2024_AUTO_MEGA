@@ -20,8 +20,9 @@ uint16_t tcs3472_read16b(uint8_t reg){
 }
 
 void tcs3472_Init(){
-  tcs3472_write8b(0x83, 0xFF);// Write WTIME to default
-  tcs3472_write8b(0x81, 0xFF);// Write ATIME to default
+  tcs3472_write8b(0x83, 0xAB);// Write WTIME to default
+  tcs3472_write8b(0x81, 0xF6);// Write ATIME to default
+  tcs3472_write8b(0x8F, 0x03);// Write AGAIN to x60
   tcs3472_write8b(0x80, 0x0B);// set WEN, PEN, AEN and PON bit   
 }
 
