@@ -4,26 +4,29 @@
 #include <Wire.h>
 
 // Macros
+#define DEBUG
 #define BALL_OUT_DELAY 3000 // 3 seconds timeout for ball to leave the robot
+
+
 
 // I/O stuffs
 // Roller motor
-#define ROLLER_PWM    0
-#define ROLLER_IN1    0
-#define ROLLER_IN2    0
+#define ROLLER_PWM    8
+#define ROLLER_IN1    29
+#define ROLLER_IN2    27
 
 #define ROLLER_SPEED  255
 
 // Conveyor motor
-#define CONVEYOR_PWM  1
-#define CONVEYOR_IN1  0
-#define CONVEYOR_IN2  0
+#define CONVEYOR_PWM  11
+#define CONVEYOR_IN1  31
+#define CONVEYOR_IN2  33
 
-#define CONVEYOR_SPEED  200
+#define CONVEYOR_SPEED  255
 
 // Limit sws
-#define LIMIT_BALL_IN   0   // Limit switch for ball in+hold detection
-#define LIMIT_BALL_OUT  1   // Limit switch for ball out detection 
+#define LIMIT_BALL_IN   39   // Limit switch for ball in+hold detection
+#define LIMIT_BALL_OUT  41   // Limit switch for ball out detection 
 
 // Serial runner task's stuffs
 uint8_t serial_fsm;
@@ -52,12 +55,12 @@ enum BALLF_FSM {
 };
 
 // RGB color sensor
-typedef struct{
+typedef struct {
   uint16_t clear_color;
   uint16_t red_color;
   uint16_t green_color;
-  uint16_t blue_color;  
-}color_read_t;
+  uint16_t blue_color;
+} color_read_t;
 
 color_read_t color_get; // typedef struct for getting color
 color_read_t color_ball_red;
@@ -66,9 +69,9 @@ color_read_t color_ball_purple;
 
 // Default readout colors of each ball types
 void color_Init() {
-  color_ball_red.red_color = 0;
-  color_ball_red.green_color = 0;
-  color_ball_red.blue_color = 0;
+  color_ball_red.red_color = 7000;
+  color_ball_red.green_color = 2700;
+  color_ball_red.blue_color = 2200;
 
   color_ball_blue.red_color = 0;
   color_ball_blue.green_color = 0;
@@ -81,13 +84,27 @@ void color_Init() {
 
 uint8_t color_check_purple() {
   uint8_t truth_flag;
-  if ((color_get.red_color > (color_ball_purple.red_color - 20)) && (color_get.red_color < (color_ball_purple.red_color + 20)))
+  if ((color_get.red_color > (color_ball_purple.red_color - 200)) && (color_get.red_color < (color_ball_purple.red_color + 200)))
     truth_flag++;
 
-  if ((color_get.green_color > (color_ball_purple.green_color - 20)) && (color_get.green_color < (color_ball_purple.green_color + 20)))
+  if ((color_get.green_color > (color_ball_purple.green_color - 200)) && (color_get.green_color < (color_ball_purple.green_color + 200)))
     truth_flag++;
 
-  if ((color_get.blue_color > (color_ball_purple.blue_color - 20)) && (color_get.blue_color < (color_ball_purple.blue_color + 20)))
+  if ((color_get.blue_color > (color_ball_purple.blue_color - 200)) && (color_get.blue_color < (color_ball_purple.blue_color + 200)))
+    truth_flag++;
+
+  return truth_flag;
+}
+
+uint8_t color_check_red() {
+  uint8_t truth_flag;
+  if ((color_get.red_color > (color_ball_red.red_color - 200)) && (color_get.red_color < (color_ball_red.red_color + 200)))
+    truth_flag++;
+
+  if ((color_get.green_color > (color_ball_red.green_color - 200)) && (color_get.green_color < (color_ball_red.green_color + 200)))
+    truth_flag++;
+
+  if ((color_get.blue_color > (color_ball_red.blue_color - 200)) && (color_get.blue_color < (color_ball_red.blue_color + 200)))
     truth_flag++;
 
   return truth_flag;
@@ -117,7 +134,13 @@ void motorDrive(uint8_t channel, int val) {
 void setup() {
   Serial.begin(115200);
   //OUTPUT
-  
+  pinMode(ROLLER_PWM, OUTPUT);
+  pinMode(ROLLER_IN1, OUTPUT);
+  pinMode(ROLLER_IN2, OUTPUT);
+
+  pinMode(CONVEYOR_PWM, OUTPUT);
+  pinMode(CONVEYOR_IN1, OUTPUT);
+  pinMode(CONVEYOR_IN2, OUTPUT);
 
   //INPUT
   // -- limit switch --
@@ -289,7 +312,7 @@ void serial_runner() {
               Serial.print(roller_flag);
               Serial.print('\t');
               Serial.print(ball_found);
-              Serial.print('\t');
+              Serial.print("\t\t");
               Serial.print(ball_accept);
               Serial.print('\t');
               Serial.print(ball_reject);
@@ -303,20 +326,26 @@ void serial_runner() {
           case 'E':// Emergency stop หยุดฉุกเฉิน
           case 'e':
             {
-              // TODO : STOP all motor and reset ball fsm to IDLE
-              roller_flag = 0;// Clear roller flag
-              ball_fsm = BALL_FSM_IDLE;// Get back to idle state
-
               if (str_idx != 1) {
                 str_idx = 0;
                 break;
               }
+              
+              // TODO : STOP all motor and reset ball fsm to IDLE
+              motorDrive(ROLLER_PWM, 0);
+              motorDrive(CONVEYOR_PWM, 0);
+              roller_flag = 0;// Clear roller flag
+              ball_accept = 0;
+              ball_reject = 0;
+              ball_fsm = BALL_FSM_IDLE;// Get back to idle state
+              
               str_idx = 0;
               memset(str_input, 0, 10);// Clear command buffer
             }
             break;
 
         }// Command parser
+        serial_fsm = SERIAL_FSM_IDLE;
       }
       break;
   }// Serial fsm
@@ -329,6 +358,9 @@ void ballFeed_runner() {
     case BALL_FSM_IDLE:// Wait for roller command 'S'
       {
         if (roller_flag == 1) {
+#ifdef DEBUG
+          Serial.println("Motor on");
+#endif
           roller_flag = 0;
           // Start roller and conveyor
           motorDrive(ROLLER_PWM, ROLLER_SPEED);
@@ -341,6 +373,9 @@ void ballFeed_runner() {
     case BALL_FSM_BALL_IN:// Wait until the ball touch limit switch and stop motor
       {
         if (digitalRead(LIMIT_BALL_IN) == 0) {
+#ifdef DEBUG
+          Serial.println("Ball detected");
+#endif
           // Stop roller and conveyor
           motorDrive(ROLLER_PWM, 0);
           motorDrive(CONVEYOR_PWM, 0);
@@ -353,19 +388,29 @@ void ballFeed_runner() {
     case BALL_FSM_BALL_CHECK:// Check ball color and decided whether to accept or reject
       {
         // Check color
+#ifdef DEBUG
+        Serial.println("Checking color...");
+#endif
         delay(10);// Little bit of delay
         tcs3472_readColor(&color_get);
         delay(10);// Little bit of delay
-        
+
         // Process each color channel
         if (color_check_purple() != 3) {
+#ifdef DEBUG
+          Serial.println("Ball REJECTED!");
+#endif
           // Confidence less than 3, reject the ball
           ball_accept = 0;
           ball_reject = 1;
           motorDrive(CONVEYOR_PWM, CONVEYOR_SPEED);
+          timeout_millis = millis();
           ball_fsm = BALL_FSM_BALL_OUT;
         } else {
           // Confidence == 3, accept the ball
+#ifdef DEBUG
+          Serial.println("Ball ACCEPTED!");
+#endif
           ball_accept = 1;
           ball_reject = 0;
           ball_fsm = BALL_FSM_BALL_HOLD;
@@ -376,19 +421,25 @@ void ballFeed_runner() {
 
     case BALL_FSM_BALL_HOLD:// Hold the ball until we got drop ball flag
       {
-         if(drop_ball_flag == 1){// Got a flag to send the ball out
+        if (drop_ball_flag == 1) { // Got a flag to send the ball out
+#ifdef DEBUG
+          Serial.println("sending Ball...");
+#endif
           drop_ball_flag = 0;
           motorDrive(CONVEYOR_PWM, CONVEYOR_SPEED);
           timeout_millis = millis();
-          ball_fsm = BALL_FSM_BALL_OUT; 
-         }
+          ball_fsm = BALL_FSM_BALL_OUT;
+        }
       }
       break;
 
     case BALL_FSM_BALL_OUT:// Send the ball out to the silo, or just reject from the robot.
       {
-        if(((millis() - timeout_millis) > BALL_OUT_DELAY) || (digitalRead(LIMIT_BALL_OUT) == 0)){
+        if (((millis() - timeout_millis) > BALL_OUT_DELAY) || (digitalRead(LIMIT_BALL_OUT) == 0)) {
           // Stop conveyor
+#ifdef DEBUG
+          Serial.println("Ball is out!");
+#endif          
           motorDrive(CONVEYOR_PWM, 0);
           // Clear all flags
           ball_found = 0;
