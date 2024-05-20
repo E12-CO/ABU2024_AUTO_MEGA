@@ -273,7 +273,28 @@ void serial_runner() {
               // serial_fsm
               // ball_fsm
               // flags
-
+              Serial.println("DEBUG MESSAGE:");
+              Serial.print("Ball FSM status : ");
+              Serial.println(ball_fsm);
+              tcs3472_readColor(&color_get);
+              Serial.println("Color sensor readout :");
+              Serial.print("Red : ");
+              Serial.println(color_get.red_color);
+              Serial.print("Green : ");
+              Serial.println(color_get.green_color);
+              Serial.print("Blue : ");
+              Serial.println(color_get.blue_color);
+              Serial.println("roller\tball_found\taccpet\treject\tdrop_ball");
+              Serial.print(roller_flag);
+              Serial.print('\t');
+              Serial.print(ball_found);
+              Serial.print('\t');
+              Serial.print(ball_accept);
+              Serial.print('\t');
+              Serial.print(ball_reject);
+              Serial.print('\t');
+              Serial.println(drop_ball_flag);
+              Serial.println("END DEBUG MESSAGE");
               memset(str_input, 0, 10);// Clear command buffer
             }
             break;
