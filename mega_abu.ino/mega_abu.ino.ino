@@ -22,7 +22,7 @@
 #define CONVEYOR_IN1  31
 #define CONVEYOR_IN2  33
 
-#define CONVEYOR_SPEED  255
+#define CONVEYOR_SPEED  190
 
 // Limit sws
 #define LIMIT_BALL_IN   39   // Limit switch for ball in+hold detection
@@ -69,17 +69,17 @@ color_read_t color_ball_purple;
 
 // Default readout colors of each ball types
 void color_Init() {
-  color_ball_red.red_color = 7000;
-  color_ball_red.green_color = 2700;
-  color_ball_red.blue_color = 2200;
+  color_ball_red.red_color = 1300;
+  color_ball_red.green_color = 700;
+  color_ball_red.blue_color = 600;
 
   color_ball_blue.red_color = 0;
   color_ball_blue.green_color = 0;
   color_ball_blue.blue_color = 0;
 
-  color_ball_purple.red_color = 0;
-  color_ball_purple.green_color = 0;
-  color_ball_purple.blue_color = 0;
+  color_ball_purple.red_color = 1600;
+  color_ball_purple.green_color = 2000;
+  color_ball_purple.blue_color = 1900;
 }
 
 uint8_t color_check_purple() {
@@ -92,6 +92,11 @@ uint8_t color_check_purple() {
 
   if ((color_get.blue_color > (color_ball_purple.blue_color - 200)) && (color_get.blue_color < (color_ball_purple.blue_color + 200)))
     truth_flag++;
+
+#ifdef DEBUG
+  Serial.print("Purple confidence :");
+  Serial.println(truth_flag);
+#endif
 
   return truth_flag;
 }
@@ -391,12 +396,12 @@ void ballFeed_runner() {
 #ifdef DEBUG
         Serial.println("Checking color...");
 #endif
-        delay(10);// Little bit of delay
+        //delay(10);// Little bit of delay
         tcs3472_readColor(&color_get);
         delay(10);// Little bit of delay
 
         // Process each color channel
-        if (color_check_purple() != 3) {
+        if (color_check_purple() == 3) {
 #ifdef DEBUG
           Serial.println("Ball REJECTED!");
 #endif
@@ -436,6 +441,7 @@ void ballFeed_runner() {
     case BALL_FSM_BALL_OUT:// Send the ball out to the silo, or just reject from the robot.
       {
         if (((millis() - timeout_millis) > BALL_OUT_DELAY) || (digitalRead(LIMIT_BALL_OUT) == 0)) {
+          delay(1000);
           // Stop conveyor
 #ifdef DEBUG
           Serial.println("Ball is out!");
