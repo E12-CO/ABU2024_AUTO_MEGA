@@ -4,7 +4,11 @@
 #include <Wire.h>
 
 // Macros
+// If you want to debug, Uncomment this line below 
 #define DEBUG
+// If you want to receive "I'm alive!" message every 2 seconds. Uncomment this line below
+//#define ALIVE
+
 #define BALL_OUT_DELAY 3000 // 3 seconds timeout for ball to leave the robot
 
 
@@ -21,7 +25,7 @@
 #define CONVEYOR_IN1  31
 #define CONVEYOR_IN2  33
 
-#define CONVEYOR_IN_SPEED   100
+#define CONVEYOR_IN_SPEED   120
 #define CONVEYOR_OUT_SPEED  255
 
 #define BALLOUT_DELAY       1500 // Delay to make sure that the ball is out to the silo
@@ -61,6 +65,8 @@ unsigned long timeout_millis = 0;
 unsigned long ballout_millis = 0;
 
 // RGB color sensor
+#define DETECTION_RANGE 100
+
 typedef struct {
   uint16_t clear_color;
   uint16_t red_color;
@@ -83,20 +89,20 @@ void color_Init() {
   color_ball_blue.green_color = 0;
   color_ball_blue.blue_color = 0;
 
-  color_ball_purple.red_color = 1600;
-  color_ball_purple.green_color = 2000;
-  color_ball_purple.blue_color = 1900;
+  color_ball_purple.red_color = 6400;
+  color_ball_purple.green_color = 8300;
+  color_ball_purple.blue_color = 8500;
 }
 
 uint8_t color_check_purple() {
-  uint8_t truth_flag;
-  if ((color_get.red_color > (color_ball_purple.red_color - 200)) && (color_get.red_color < (color_ball_purple.red_color + 200)))
+  uint8_t truth_flag = 0;
+  if ((color_get.red_color > (color_ball_purple.red_color - DETECTION_RANGE)) && (color_get.red_color < (color_ball_purple.red_color + DETECTION_RANGE)))
     truth_flag++;
 
-  if ((color_get.green_color > (color_ball_purple.green_color - 200)) && (color_get.green_color < (color_ball_purple.green_color + 200)))
+  if ((color_get.green_color > (color_ball_purple.green_color - DETECTION_RANGE)) && (color_get.green_color < (color_ball_purple.green_color + DETECTION_RANGE)))
     truth_flag++;
 
-  if ((color_get.blue_color > (color_ball_purple.blue_color - 200)) && (color_get.blue_color < (color_ball_purple.blue_color + 200)))
+  if ((color_get.blue_color > (color_ball_purple.blue_color - DETECTION_RANGE)) && (color_get.blue_color < (color_ball_purple.blue_color + DETECTION_RANGE)))
     truth_flag++;
 
 #ifdef DEBUG
@@ -108,14 +114,14 @@ uint8_t color_check_purple() {
 }
 
 uint8_t color_check_red() {
-  uint8_t truth_flag;
-  if ((color_get.red_color > (color_ball_red.red_color - 200)) && (color_get.red_color < (color_ball_red.red_color + 200)))
+  uint8_t truth_flag = 0;
+  if ((color_get.red_color > (color_ball_red.red_color - DETECTION_RANGE)) && (color_get.red_color < (color_ball_red.red_color + DETECTION_RANGE)))
     truth_flag++;
 
-  if ((color_get.green_color > (color_ball_red.green_color - 200)) && (color_get.green_color < (color_ball_red.green_color + 200)))
+  if ((color_get.green_color > (color_ball_red.green_color - DETECTION_RANGE)) && (color_get.green_color < (color_ball_red.green_color + DETECTION_RANGE)))
     truth_flag++;
 
-  if ((color_get.blue_color > (color_ball_red.blue_color - 200)) && (color_get.blue_color < (color_ball_red.blue_color + 200)))
+  if ((color_get.blue_color > (color_ball_red.blue_color - DETECTION_RANGE)) && (color_get.blue_color < (color_ball_red.blue_color + DETECTION_RANGE)))
     truth_flag++;
 
   return truth_flag;
@@ -143,7 +149,7 @@ void motorDrive(uint8_t channel, int val) {
 }
 
 void setup() {
-  Serial.begin(115200);
+  Serial.begin(38400);
   //OUTPUT
   pinMode(ROLLER_PWM, OUTPUT);
   pinMode(ROLLER_IN1, OUTPUT);
@@ -167,9 +173,23 @@ void setup() {
   delay(1000);
 }
 
+#ifdef DEBUG
+#ifdef ALIVE
+unsigned long heartbeat_millis = 0;
+#endif
+#endif
+
 void loop() {
   serial_runner();
   ballFeed_runner();
+#ifdef DEBUG
+#ifdef ALIVE
+  if ((millis() - heartbeat_millis) > 2000) {
+    heartbeat_millis = millis();
+    Serial.println("I'm alive!");
+  }
+#endif
+#endif
 }
 
 /* สรุปคำสั่ง
@@ -219,8 +239,6 @@ void serial_runner() {
               str_idx = 0;
 
               roller_flag = 1;
-
-              
             }
             break;
 
@@ -247,7 +265,7 @@ void serial_runner() {
                 else
                   Serial.print('F');
               }
-              
+
             }
             break;
 
@@ -260,12 +278,12 @@ void serial_runner() {
               }
               str_idx = 0;
 
-              if(ball_done_flag == 1)
+              if (ball_done_flag == 1)
                 Serial.print('T');
               else
                 Serial.print('F');
-          
-              
+
+
             }
             break;
 
@@ -280,7 +298,7 @@ void serial_runner() {
 
               ball_accept = 1;
               ball_reject = 0;
-              
+
             }
             break;
 
@@ -295,7 +313,7 @@ void serial_runner() {
 
               ball_accept = 0;
               ball_reject = 1;
-              
+
             }
             break;
 
@@ -345,8 +363,8 @@ void serial_runner() {
               Serial.print(ball_reject);
               Serial.print('\t');
               Serial.print(drop_ball_flag);
-              Serial.print('\t');
-              Serial.print(ball_done_flag);
+              Serial.print("\t\t");
+              Serial.println(ball_done_flag);
               Serial.println("END DEBUG MESSAGE");
             }
             break;
@@ -368,7 +386,20 @@ void serial_runner() {
               ball_fsm = BALL_FSM_IDLE;// Get back to idle state
 
               str_idx = 0;
-              
+
+            }
+            break;
+
+          default:
+            {
+              if (str_idx != 1) {
+                str_idx = 0;
+                break;
+              }
+#ifdef DEBUG
+               Serial.println("Invalid command!");
+#endif        
+              str_idx = 0;
             }
             break;
 
@@ -391,7 +422,7 @@ void ballFeed_runner() {
           // Clear flag
           roller_flag = 0;
           ball_done_flag = 0;
-          
+
           // Start roller and conveyor
           motorDrive(ROLLER_PWM, ROLLER_SPEED);
           motorDrive(CONVEYOR_PWM, CONVEYOR_IN_SPEED);
@@ -423,7 +454,7 @@ void ballFeed_runner() {
         Serial.println("Checking color...");
 #endif
         // Process each color channel
-        if (color_check_purple() == 3) {
+        if (color_check_purple() >= 2) {
 #ifdef DEBUG
           Serial.println("Ball REJECTED!");
 #endif
@@ -473,7 +504,7 @@ void ballFeed_runner() {
 
     case BALL_FSM_BALL_OUT_DLY:// After the ball arrived at the ball out point, delay to make sure that the ball is out
       {
-        if((millis() - ballout_millis) > BALLOUT_DELAY){
+        if ((millis() - ballout_millis) > BALLOUT_DELAY) {
 #ifdef DEBUG
           Serial.println("Ball is out!");
 #endif
@@ -487,7 +518,7 @@ void ballFeed_runner() {
 
           // Set Ball done flag.
           ball_done_flag = 1;
-          
+
           ball_fsm = BALL_FSM_IDLE;
         }
       }
