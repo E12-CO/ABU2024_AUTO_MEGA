@@ -5,7 +5,7 @@
 
 // Macros
 // If you want to debug, Uncomment this line below 
-#define DEBUG
+//#define DEBUG
 // If you want to receive "I'm alive!" message every 2 seconds. Uncomment this line below
 //#define ALIVE
 
@@ -25,7 +25,7 @@
 #define CONVEYOR_IN1  31
 #define CONVEYOR_IN2  33
 
-#define CONVEYOR_IN_SPEED   120
+#define CONVEYOR_IN_SPEED   255 
 #define CONVEYOR_OUT_SPEED  255
 
 #define BALLOUT_DELAY       1500 // Delay to make sure that the ball is out to the silo
@@ -164,12 +164,13 @@ void setup() {
   pinMode(LIMIT_BALL_IN,    INPUT_PULLUP);
   pinMode(LIMIT_BALL_OUT,   INPUT_PULLUP);
   // -- rgb sensor
-  color_Init();
-  Wire.begin();
-  tcs3472_Init();
+  //color_Init();
+  //Wire.begin();
+  //tcs3472_Init();
 
-
+#ifdef DEBUG
   Serial.println("Starting...");
+#endif
   delay(1000);
 }
 
@@ -194,10 +195,9 @@ void loop() {
 
 /* สรุปคำสั่ง
    S\n -> สั่งเริ่มดูดบอล Roller กับ Conveyor หมุน
-   H\n -> Pi ถามแบบบอลที่ดูดได้ Mega จะส่งasciiกลับมาดังนี้
+   H\n -> Pi ถาม้ Mega มีบอลมั้ย จะส่งasciiกลับมาดังนี้
       - 'F' คือไม่มีลูกบอลกดอยู่ที่ Limit switch
-      - 'A' คือมีลูกบอลที่Limit switchและเอา(แดง/น้ำเงิน)
-      - 'R' คือมีลูกบอลที่Limit switch แต่ไม่เอา(ม่วง)
+      - 'A' คือมีลูกบอลที่Limit switch
    A\n -> (อาจจะไม่ได้ใช้)รับบอลไว้กรณีเป็นสีที่ต้องการ
    R\n -> (อาจจะไม่ได้ใช้)คายบอลออกกรณีไม่ใช่สีที่ต้องการ
    O\n -> สั่งปล่อยบอลลงที่ Silo
@@ -242,7 +242,7 @@ void serial_runner() {
             }
             break;
 
-          case 'H':// Rpi request to check ball color (Pi ขอเช็คว่าเอาหรือไม่เอาบอล)
+          case 'H':// Rpi request to check ball status (Pi ขอเช็คว่ามีบอลมั้ย)
           case 'h':
             {
               if (str_idx != 1) {
@@ -251,19 +251,13 @@ void serial_runner() {
               }
               str_idx = 0;
               // Three Types of respond
-              // Waiting, ball empty -> Serial.print('F');
-              // Correct ball -> Serial.print('A');
-              // Rejected ball -> Serial.print('R');
+              // ball empty -> Serial.print('F');
+              // ball not empty -> Serial.print('T');
 
               if (ball_found == 0) {
                 Serial.print('F');
               } else {
-                if (ball_accept == 1 && ball_reject == 0)
-                  Serial.print('A');
-                else if (ball_accept == 0 && ball_reject == 1)
-                  Serial.print('R');
-                else
-                  Serial.print('F');
+                Serial.print('T');
               }
 
             }
@@ -345,14 +339,14 @@ void serial_runner() {
               Serial.println("DEBUG MESSAGE:");
               Serial.print("Ball FSM status : ");
               Serial.println(ball_fsm);
-              tcs3472_readColor(&color_get);
-              Serial.println("Color sensor readout :");
-              Serial.print("Red : ");
-              Serial.println(color_get.red_color);
-              Serial.print("Green : ");
-              Serial.println(color_get.green_color);
-              Serial.print("Blue : ");
-              Serial.println(color_get.blue_color);
+              //tcs3472_readColor(&color_get);
+              //Serial.println("Color sensor readout :");
+              //Serial.print("Red : ");
+              //Serial.println(color_get.red_color);
+              //Serial.print("Green : ");
+              //Serial.println(color_get.green_color);
+              //Serial.print("Blue : ");
+              //Serial.println(color_get.blue_color);
               Serial.println("roller\tball_found\taccpet\treject\tdrop_ball\tball_done");
               Serial.print(roller_flag);
               Serial.print('\t');
@@ -434,7 +428,7 @@ void ballFeed_runner() {
     case BALL_FSM_BALL_IN:// Wait until the ball touch limit switch and stop motor
       {
         if (digitalRead(LIMIT_BALL_IN) == 0) {
-          tcs3472_readColor(&color_get);// Sample color real quick
+          //tcs3472_readColor(&color_get);// Sample color real quick
 #ifdef DEBUG
           Serial.println("Ball detected");
 #endif
@@ -451,27 +445,25 @@ void ballFeed_runner() {
       {
         // Check color
 #ifdef DEBUG
-        Serial.println("Checking color...");
+        Serial.println("Waiting acception...");
 #endif
-        // Process each color channel
-        if (color_check_purple() >= 2) {
+        if ((ball_accept == 0) && (ball_reject == 1)) {
 #ifdef DEBUG
           Serial.println("Ball REJECTED!");
 #endif
-          // Confidence less than 3, reject the ball
-          ball_accept = 0;
-          ball_reject = 1;
           motorDrive(CONVEYOR_PWM, CONVEYOR_OUT_SPEED);
           timeout_millis = millis();
           ball_fsm = BALL_FSM_BALL_OUT;
-        } else {
-          // Confidence == 3, accept the ball
+        } else if((ball_accept == 1) && (ball_reject == 0)){
 #ifdef DEBUG
           Serial.println("Ball ACCEPTED!");
 #endif
-          ball_accept = 1;
-          ball_reject = 0;
           ball_fsm = BALL_FSM_BALL_HOLD;
+        }else{
+#ifdef DEBUG
+          Serial.println("Ball Decision ERROR!");
+#endif        
+          ball_fsm = BALL_FSM_BALL_CHECK;
         }
 
       }
