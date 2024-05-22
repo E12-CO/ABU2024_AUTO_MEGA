@@ -149,7 +149,7 @@ void motorDrive(uint8_t channel, int val) {
 }
 
 void setup() {
-  Serial.begin(38400);
+  Serial.begin(115200);
   //OUTPUT
   pinMode(ROLLER_PWM, OUTPUT);
   pinMode(ROLLER_IN1, OUTPUT);
@@ -458,6 +458,7 @@ void ballFeed_runner() {
 #ifdef DEBUG
           Serial.println("Ball ACCEPTED!");
 #endif
+          motorDrive(CONVEYOR_PWM, CONVEYOR_OUT_SPEED);
           ball_fsm = BALL_FSM_BALL_HOLD;
         }else{
 #ifdef DEBUG
@@ -471,14 +472,21 @@ void ballFeed_runner() {
 
     case BALL_FSM_BALL_HOLD:// Hold the ball until we got drop ball flag
       {
-        if (drop_ball_flag == 1) { // Got a flag to send the ball out
+        if (digitalRead(LIMIT_BALL_OUT) == 0) { // wait until ball reached the top
 #ifdef DEBUG
-          Serial.println("sending Ball...");
+          Serial.println("Load the ball...");
 #endif
-          drop_ball_flag = 0;
+          motorDrive(CONVEYOR_PWM, 0);
+        }
+
+        if(drop_ball_flag == 1){
+#ifdef DEBUG
+          Serial.println("sending the ball...");
+#endif
           motorDrive(CONVEYOR_PWM, CONVEYOR_OUT_SPEED);
-          timeout_millis = millis();
-          ball_fsm = BALL_FSM_BALL_OUT;
+          drop_ball_flag = 0;
+          ballout_millis = millis();
+          ball_fsm = BALL_FSM_BALL_OUT_DLY;
         }
       }
       break;
