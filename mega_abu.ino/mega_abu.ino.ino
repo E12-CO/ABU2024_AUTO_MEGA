@@ -21,9 +21,9 @@
 #define ROLLER_SPEED  255
 
 // Conveyor motor
-#define CONVEYOR_PWM  11
-#define CONVEYOR_IN1  31
-#define CONVEYOR_IN2  33
+#define CONVEYOR_PWM  7
+#define CONVEYOR_IN1  28
+#define CONVEYOR_IN2  26
 
 #define CONVEYOR_IN_SPEED   255 
 #define CONVEYOR_OUT_SPEED  255
